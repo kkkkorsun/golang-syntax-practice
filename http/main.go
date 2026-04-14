@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"io"
+	"math/rand"
 	"net/http"
 	"strconv"
 	"sync"
@@ -38,11 +39,14 @@ func NewMessageStorage() *MessageStorage {
 	return &MessageStorage{sync.Mutex{}, newMap}
 }
 
-func (m *MessageStorage) AddMessage(id int64, message string) {
+func (m *MessageStorage) AddMessage(message string) int64 {
 	m.mtx.Lock()
 	defer m.mtx.Unlock()
 
-	m.messages[id] = message
+	messageId := rand.Int63()
+	m.messages[messageId] = message
+
+	return messageId
 }
 func (m *MessageStorage) GetMessages() map[int64]string {
 	m.mtx.Lock()
@@ -56,11 +60,12 @@ func (m *MessageStorage) GetMessages() map[int64]string {
 	return messagesToSend
 }
 
-func (m *MessageStorage) GetMessageById(id int64) string {
+func (m *MessageStorage) GetMessageById(id int64) (string, bool) {
 	m.mtx.Lock()
 	defer m.mtx.Unlock()
 
-	return m.messages[id]
+	message, ok := m.messages[id]
+	return message, ok
 }
 func (m *MessageStorage) DeleteMessage(id int64) {
 	m.mtx.Lock()
@@ -71,7 +76,6 @@ func (m *MessageStorage) DeleteMessage(id int64) {
 
 func secondTask() {
 	storage := NewMessageStorage()
-	var messageId int64 = 0
 
 	http.HandleFunc("/add-message", func(w http.ResponseWriter, r *http.Request) {
 		httpRequestBody, err := io.ReadAll(r.Body)
@@ -82,9 +86,8 @@ func secondTask() {
 
 		userMessage := string(httpRequestBody)
 
-		storage.AddMessage(messageId, userMessage)
+		messageId := storage.AddMessage(userMessage)
 		fmt.Println("Успешно добавили сообщение: ", userMessage, "с айди: ", messageId)
-		messageId++
 
 		fmt.Println("Текущие сообщения: ", storage.GetMessages())
 	})
@@ -104,12 +107,86 @@ func secondTask() {
 		}
 
 		messageIdToDelete := int64(id)
-		fmt.Println("Удаляем сообщение: ", storage.GetMessageById(messageIdToDelete))
-		storage.DeleteMessage(messageIdToDelete)
 
-		fmt.Println("Успешно удалили сообщение с айди: ", messageIdToDelete)
+		message, ok := storage.GetMessageById(messageIdToDelete)
+		if ok {
+			fmt.Println("Удаляем сообщение: ", message)
+			storage.DeleteMessage(messageIdToDelete)
 
-		fmt.Println("Текущие сообщения: ", storage.GetMessages())
+			fmt.Println("Успешно удалили сообщение с айди: ", messageIdToDelete)
+
+			fmt.Println("Текущие сообщения: ", storage.GetMessages())
+		} else {
+			fmt.Println("Сообщения для удаления с текущим айди не найдено")
+		}
+	})
+
+	http.HandleFunc("/get-all-messages", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Println(storage.GetMessages())
+	})
+
+	http.HandleFunc("/get-message", func(w http.ResponseWriter, r *http.Request) {
+		httpRequestBody, err := io.ReadAll(r.Body)
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+		body := string(httpRequestBody)
+		id, err := strconv.Atoi(body)
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+		messageIdToGet := int64(id)
+
+		message, ok := storage.GetMessageById(messageIdToGet)
+		if ok {
+			w.WriteHeader(http.StatusOK)
+			_, err = w.Write([]byte(message))
+			if err != nil {
+				return
+			}
+
+			fmt.Println("Запрошенное сообщение: ", message)
+		} else {
+			w.WriteHeader(http.StatusNotFound)
+			_, err = w.Write([]byte("Сообщения с текущим айди не найдено"))
+			if err != nil {
+				return
+			}
+		}
+	})
+
+	err := http.ListenAndServe(":8090", nil)
+	if err != nil {
+		return
+	}
+}
+
+func thirdTask() {
+	http.HandleFunc("/return-codes", func(w http.ResponseWriter, r *http.Request) {
+		httpRequestBody, err := io.ReadAll(r.Body)
+		if err != nil {
+			fmt.Println(err)
+		}
+		body := string(httpRequestBody)
+		id, _ := strconv.Atoi(body)
+		code := int64(id)
+
+		switch code {
+		case 200:
+			w.WriteHeader(http.StatusOK)
+			fmt.Println("Вернули 200")
+		case 400:
+			w.WriteHeader(http.StatusBadRequest)
+			fmt.Println("Вернули 400")
+		case 500:
+			w.WriteHeader(http.StatusInternalServerError)
+			fmt.Println("Вернули 500")
+		default:
+			w.WriteHeader(http.StatusBadRequest)
+			fmt.Println("Этот код не обрабатывается, возвращаем 400")
+		}
 	})
 
 	err := http.ListenAndServe(":8090", nil)
