@@ -31,7 +31,9 @@ func main() {
 
 	//tenthTask()
 
-	eleventhTask()
+	//eleventhTask()
+
+	twelfthTask()
 }
 
 func firstTask() {
@@ -371,7 +373,81 @@ func eleventhTask() {
 
 }
 
+type KeystoreRW struct {
+	s sync.RWMutex
+	v map[string]string
+}
+
+type KeystoreMT struct {
+	s sync.Mutex
+	v map[string]string
+}
+
+func NewKeystoreMT() *KeystoreMT {
+	return &KeystoreMT{
+		s: sync.Mutex{},
+		v: make(map[string]string),
+	}
+}
+
+func (k *KeystoreMT) Update(key string, value string) {
+	k.s.Lock()
+	k.v[key] = value
+	k.s.Unlock()
+}
+
+func (k *KeystoreMT) Get(key string) string {
+	k.s.Lock()
+	defer k.s.Unlock()
+	return k.v[key]
+}
+
+func NewKeystoreRW() *KeystoreRW {
+	return &KeystoreRW{
+		s: sync.RWMutex{},
+		v: make(map[string]string),
+	}
+}
+
+func (k *KeystoreRW) Update(key string, value string) {
+	k.s.Lock()
+	k.v[key] = value
+	k.s.Unlock()
+}
+
+func (k *KeystoreRW) Get(key string) string {
+	k.s.RLock()
+	defer k.s.RUnlock()
+	return k.v[key]
+}
+
 func twelfthTask() {
-	keystoreMap := map[string]string{}
-	
+	keystoreRW := NewKeystoreRW()
+	//keystoreMT := NewKeystoreMT()
+
+	var wg sync.WaitGroup
+
+	workWithRW(keystoreRW)
+
+	for i := 0; i < rand.Intn(100)+1; i++ {
+		keystoreRW.Update(GenerateString(5), GenerateString(5))
+	}
+
+	for i := 0; i < rand.Intn(100)+1; i++ {
+		wg.Add(1)
+		go func() {
+			for key, _ := range keystoreRW.v {
+				fmt.Println(keystoreRW.Get(key))
+			}
+			wg.Done()
+		}()
+	}
+
+	wg.Wait()
+}
+
+func workWithRW(m *KeystoreRW) {
+	for i := 0; i < rand.Intn(100)+1; i++ {
+		m.Update(GenerateString(5), GenerateString(5))
+	}
 }
