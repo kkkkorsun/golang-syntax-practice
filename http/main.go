@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"math/rand"
@@ -31,47 +32,63 @@ func firstTask() {
 
 type MessageStorage struct {
 	mtx      sync.Mutex
-	messages map[int64]string
+	messages map[int64]Message
+}
+
+type Message struct {
+	Title     string `json:"title"`
+	Postcode  int64  `json:"postcode"`
+	Body      string `json:"body"`
+	IsExpress bool   `json:"is_express"`
+}
+
+func CreateEmptyMessage() *Message {
+	return &Message{
+		Title:     "",
+		Postcode:  0,
+		Body:      "",
+		IsExpress: false,
+	}
 }
 
 func NewMessageStorage() *MessageStorage {
-	newMap := make(map[int64]string)
+	newMap := make(map[int64]Message)
 	return &MessageStorage{sync.Mutex{}, newMap}
 }
 
-func (m *MessageStorage) AddMessage(message string) int64 {
-	m.mtx.Lock()
-	defer m.mtx.Unlock()
+func (ms *MessageStorage) AddMessage(message Message) int64 {
+	ms.mtx.Lock()
+	defer ms.mtx.Unlock()
 
 	messageId := rand.Int63()
-	m.messages[messageId] = message
+	ms.messages[messageId] = message
 
 	return messageId
 }
-func (m *MessageStorage) GetMessages() map[int64]string {
-	m.mtx.Lock()
-	defer m.mtx.Unlock()
+func (ms *MessageStorage) GetMessages() map[int64]Message {
+	ms.mtx.Lock()
+	defer ms.mtx.Unlock()
 
-	var messagesToSend = make(map[int64]string)
+	var messagesToSend = make(map[int64]Message)
 
-	for k, v := range m.messages {
+	for k, v := range ms.messages {
 		messagesToSend[k] = v
 	}
 	return messagesToSend
 }
 
-func (m *MessageStorage) GetMessageById(id int64) (string, bool) {
-	m.mtx.Lock()
-	defer m.mtx.Unlock()
+func (ms *MessageStorage) GetMessageById(id int64) (Message, bool) {
+	ms.mtx.Lock()
+	defer ms.mtx.Unlock()
 
-	message, ok := m.messages[id]
+	message, ok := ms.messages[id]
 	return message, ok
 }
-func (m *MessageStorage) DeleteMessage(id int64) {
-	m.mtx.Lock()
-	defer m.mtx.Unlock()
+func (ms *MessageStorage) DeleteMessage(id int64) {
+	ms.mtx.Lock()
+	defer ms.mtx.Unlock()
 
-	delete(m.messages, id)
+	delete(ms.messages, id)
 }
 
 func secondTask() {
@@ -90,9 +107,14 @@ func secondTask() {
 			return
 		}
 
-		userMessage := string(httpRequestBody)
+		userMessage := CreateEmptyMessage()
+		parseErr := json.Unmarshal(httpRequestBody, &userMessage)
+		if err != nil {
+			fmt.Println(parseErr)
+			return
+		}
 
-		messageId := storage.AddMessage(userMessage)
+		messageId := storage.AddMessage(*userMessage)
 		fmt.Println("Успешно добавили сообщение: ", userMessage, "с айди: ", messageId)
 
 		fmt.Println("Текущие сообщения: ", storage.GetMessages())
@@ -140,6 +162,10 @@ func secondTask() {
 			return
 		}
 
+		messagesToSend, _ := json.Marshal(storage.GetMessages())
+
+		w.Write(messagesToSend)
+
 		fmt.Println(storage.GetMessages())
 	})
 
@@ -166,7 +192,8 @@ func secondTask() {
 		message, ok := storage.GetMessageById(messageIdToGet)
 		if ok {
 			w.WriteHeader(http.StatusOK)
-			_, err = w.Write([]byte(message))
+			bytesToSend, _ := json.Marshal(message)
+			_, err = w.Write(bytesToSend)
 			if err != nil {
 				return
 			}
