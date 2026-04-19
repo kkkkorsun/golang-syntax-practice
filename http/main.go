@@ -78,6 +78,12 @@ func secondTask() {
 	storage := NewMessageStorage()
 
 	http.HandleFunc("/add-message", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			w.Write([]byte("Ошибка, вызван неправильный метод"))
+			return
+		}
+
 		httpRequestBody, err := io.ReadAll(r.Body)
 		if err != nil {
 			fmt.Println(err)
@@ -93,6 +99,12 @@ func secondTask() {
 	})
 
 	http.HandleFunc("/delete-message", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodDelete {
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			w.Write([]byte("Ошибка, вызван неправильный метод"))
+			return
+		}
+
 		httpRequestBody, err := io.ReadAll(r.Body)
 		if err != nil {
 			fmt.Println(err)
@@ -122,10 +134,22 @@ func secondTask() {
 	})
 
 	http.HandleFunc("/get-all-messages", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			w.Write([]byte("Ошибка, вызван неправильный метод"))
+			return
+		}
+
 		fmt.Println(storage.GetMessages())
 	})
 
 	http.HandleFunc("/get-message", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			w.Write([]byte("Ошибка, вызван неправильный метод"))
+			return
+		}
+
 		httpRequestBody, err := io.ReadAll(r.Body)
 		if err != nil {
 			fmt.Println(err)
@@ -193,4 +217,31 @@ func thirdTask() {
 	if err != nil {
 		return
 	}
+}
+
+func fourthTask() {
+	http.HandleFunc("/get-headers", func(w http.ResponseWriter, r *http.Request) {
+		senderName := r.Header.Get("Sender-Name")
+		if len(senderName) == 0 {
+			fmt.Println("Передали пустое имя")
+		} else {
+			fmt.Println("Привет ", senderName)
+		}
+	})
+
+	http.ListenAndServe(":8090", nil)
+}
+
+func fifthTask() {
+	http.HandleFunc("/allowed-method", func(writer http.ResponseWriter, request *http.Request) {
+		if request.Method != http.MethodGet {
+			writer.WriteHeader(http.StatusMethodNotAllowed)
+			writer.Write([]byte("Not Allowed"))
+		} else {
+			writer.WriteHeader(http.StatusOK)
+			writer.Write([]byte("Allowed"))
+		}
+	})
+
+	http.ListenAndServe(":8090", nil)
 }
