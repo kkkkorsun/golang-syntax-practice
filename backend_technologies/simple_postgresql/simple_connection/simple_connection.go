@@ -7,20 +7,20 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-func Connect(ctx context.Context) error {
+func Connect(ctx context.Context) (*pgx.Conn, error) {
 	conn, connErr := pgx.Connect(ctx, "postgres://postgres:pass@localhost:5432/postgres")
 	if connErr != nil {
-		return connErr
+		return nil, connErr
 	}
 
 	fmt.Println("Подключение к базе прошло успешно")
 
 	pingErr := conn.Ping(ctx)
 	if pingErr != nil {
-		return pingErr
+		return nil, pingErr
 	}
 
 	fmt.Println("Пинг в базу данныз отправлен успешно")
 
-	return nil
+	return conn, nil
 }
